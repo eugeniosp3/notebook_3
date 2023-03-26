@@ -3,6 +3,43 @@ import Head from 'next/head';
 import dynamic from 'next/dynamic';
 import styles from '../styles/Home.module.css';
 import { UilHeart } from '@iconscout/react-unicons';
+import { nanoid } from 'nanoid';
+import { UilFileTimesAlt, UilHistory } from '@iconscout/react-unicons'
+const id = nanoid(); // generate a new unique ID
+
+function TrashBin({ notes, onDeleteNote, onRestoreNote }) {
+  if (!notes) {
+    return null;
+  }
+
+  const handleRestoreNote = (note) => {
+    const confirmed = window.confirm(`Are you sure you want to restore ${note.title} from deleted?`);
+    if (confirmed) {
+      onRestoreNote(note);
+    }
+  };
+
+  return (
+    <div>
+      {notes.map((note) => (
+        <div key={note.id} className={styles.sidebarItemTrashy} onClick={() => handleRestoreNote(note)}>
+          <button  className={styles.trashBinButton} title="Restore item">
+            <UilHistory title="Restore item" className={styles.trashBinIcon}/>
+          </button>
+          <p className={styles.trashNoteTitle}>{note.title}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrashBinModal({ isOpen, notes, onRestoreNote }) {
+  return (
+    <div>
+      <TrashBin notes={notes} onRestoreNote={onRestoreNote} />
+    </div>
+  );
+}
 
 
 const Editor = dynamic(
@@ -40,6 +77,12 @@ export default function Home() {
   const [newNote, setNewNote] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [selectedNote, setSelectedNote] = useState(null);
+  const [selectedNoteIndex, setSelectedNoteIndex] = useState(null);
+  const [deletedNotes, setDeletedNotes] = useLocalStorage('deletedNotes', []);
+  const [selectedColorPair, setSelectedColorPair] = useState(['#335145', '#1e352f']);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+
 
   useEffect(() => {
     setIsMounted(true);
@@ -54,25 +97,96 @@ export default function Home() {
     setNewTitle(event.target.value);
   };
 
-  const handleButtonClick = () => {
+  const handleButtonClick = (event) => {
+    event.preventDefault(); // prevent form submission
     if (newNote.trim() !== '' && newTitle.trim() !== '') {
-      setNotes([...notes, { title: newTitle, note: newNote }]);
+      const existingNoteIndex = notes.findIndex(note => note.title === newTitle);
+      if (existingNoteIndex !== -1) {
+        const newNotes = [...notes];
+        newNotes[existingNoteIndex] = { ...newNotes[existingNoteIndex], note: newNote };
+        setNotes(newNotes);
+      } else {
+        const newNoteObj = { id: nanoid(), title: newTitle, note: newNote };
+        setNotes([...notes, newNoteObj]);
+      }
       setNewTitle('');
       setNewNote('');
     }
   };
 
-  const handleRemoveButtonClick = (index, event) => {
+
+  const handleRemoveButtonClick = (event) => {
     event.stopPropagation();
+    if (selectedNoteIndex === null) {
+      return; // no note is selected, do nothing
+    }
+    const deletedNote = notes[selectedNoteIndex];
+    const shouldDelete = window.confirm(`Are you sure you want to delete the note "${deletedNote.title}"?`);
+    if (shouldDelete) {
     const newNotes = [...notes];
-    newNotes.splice(index, 1);
+      newNotes.splice(selectedNoteIndex, 1);
     setNotes(newNotes);
+      setSelectedNoteIndex(null);
+      setNewTitle('');
+      setNewNote('');
+      setDeletedNotes([...deletedNotes, deletedNote]);
+    } else {
+      setNewTitle(deletedNote.title);
+      setNewNote(deletedNote.note);
+    }
   };
 
-  const handleNoteClick = (event, note) => {
+  
+
+  const handleNoteClick = (event, note, index) => {
     event.preventDefault();
-    setSelectedNote(note.title);
+    setSelectedNote(note.id);
+    setNewTitle(note.title);
+    setNewNote(note.note);
+    setSelectedNoteIndex(index);
   };
+
+
+
+  const handleNewNoteButtonClick = () => {
+    setNewTitle('');
+    setNewNote('');
+    setSelectedNote(null);
+    setSelectedNoteIndex(null);
+  };
+  
+
+  const handleSaveButtonClick = () => {
+    const newNotes = notes.map((note) => {
+      if (note.id === selectedNote) {
+        return { ...note, title: newTitle, note: newNote };
+      } else {
+        return note;
+      }
+    });
+    setNotes(newNotes);
+    setSelectedNote(null);
+    setSelectedNoteIndex(null);
+    setNewNote('');
+  };
+  
+  const handleDeleteNote = (note) => {
+    const newDeletedNotes = deletedNotes.filter((n) => n.id !== note.id);
+    setDeletedNotes(newDeletedNotes);
+  };
+  
+  const handleTrashBinClick = () => {
+    setIsModalOpen(!isModalOpen);
+  };
+
+  const handleRestoreNote = (note) => {
+    const newDeletedNotes = deletedNotes.filter((n) => n.id !== note.id);
+    setDeletedNotes(newDeletedNotes);
+    setNotes([...notes, note]);
+  };
+  
+
+
 
   if (!isMounted) {
     return null;
@@ -80,20 +194,69 @@ export default function Home() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.sidebar}>
+        <div className={styles.sidebar} style={{ backgroundImage: `linear-gradient(to bottom, ${selectedColorPair[0]} 50%, ${selectedColorPair[1]})` }}>
         <div className={styles.appLogo}>
           NoteBook
           <UilHeart width={18} className={styles.logoIcon}/>
         </div>
         <div className={styles.sidebarNotesList}>
         <p className={styles.noteHeaderTitle}>Select Note</p>
-
         {notes.map((note, index) => (
-          <div key={index} className={styles.sidebarItem} onClick={(event) => handleNoteClick(event, note)}>
+    <div
+      key={index}
+      className={styles.sidebarItem}
+      onClick={(event) => handleNoteClick(event, note, index)}
+      title={note.title}
+    >
             {note.title}
           </div>
         ))}
         </div>
+      
+      <div className={styles.trashHistory}>
+            <button className={styles.trashBinButton} onClick={handleTrashBinClick}>
+              <UilFileTimesAlt className={styles.trashBinIcon} />
+              <span className={styles.trashBinText}>Recently Deleted</span>
+            </button>
+          <div className={styles.historyDeleted}>
+            <TrashBinModal className={styles.trashBinButton} isOpen={isModalOpen} notes={deletedNotes} onRestoreNote={handleRestoreNote} />
+          </div>
+      </div>
+          <div className={styles.themeButtons}>
+            <span className={styles.themeButtonTitle}>Themes</span>
+            <div className={styles.themeButtonContainer}>
+            <button
+              className={styles.themeButton}
+              style={{ backgroundImage: `linear-gradient(to bottom, #703D57 20%, #402a2c)` }}
+              onClick={() => setSelectedColorPair(['#703D57', '#402a2c'])}>
+            </button>
+            <button
+              className={styles.themeButton}
+              style={{ backgroundImage: `linear-gradient(to bottom, #335145 40%, #1e352f)` }}
+              onClick={() => setSelectedColorPair(['#335145', '#1e352f'])}
+            >
+            </button>
+            <button
+              className={styles.themeButton}
+              style={{ backgroundImage: `linear-gradient(to bottom, #124559 40%, #01161E)` }}
+              onClick={() => setSelectedColorPair(['#124559', '#01161E'])}
+            >
+            </button>
+            <button
+              className={styles.themeButton}
+              style={{ backgroundImage: `linear-gradient(to bottom, #950952 40%, #5e0035)` }}
+              onClick={() => setSelectedColorPair(['#950952', '#5e0035'])}
+            >
+            </button>
+            <button
+              className={styles.themeButton}
+              style={{ backgroundImage: `linear-gradient(to bottom, #31263E 40%, #221E22)` }}
+              onClick={() => setSelectedColorPair(['#31263E', '#221E22'])}
+            >
+            </button>
+            </div>
+          </div>
+
       </div>
       <div className={styles.main}>
         {/* <div className={styles.headerBox}>
@@ -104,42 +267,38 @@ export default function Home() {
           <Editor
             apiKey="3s639nkdq31n86l81eye1orgt165wokgf4wtdkjljs9sdnld"
             init={{
-              height: 870,
-              menubar: true,
-              plugins: [
-                'advlist autolink lists link image charmap print preview anchor',
-                'searchreplace visualblocks code fullscreen',
-                'insertdatetime media table paste code help wordcount'
-              ],
-              toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft aligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | code | help'
+              selector: 'textarea#premiumskinsandicons-snow',
+              skin: 'snow',
+              icons: 'thin',
+              plugins: 'quickbars image lists code table codesample',
+              toolbar: 'formatselect | forecolor backcolor | bold italic underline strikethrough | link image blockquote codesample | align bullist numlist | code ',
+              height: 800,
+              content_style: 'body { margin: 2rem 10%; }'
             }}
             value={newNote}
             onEditorChange={handleEditorChange}
             styles={{ border: 'transparent' }}
 
           />
-          <button className={styles.submitNote} onClick={handleButtonClick}>Add Note</button>
-        </div>
-        <div className={styles.noteDisplay}>
-          {selectedNote ? (
-            notes.map((note, index) => (
-              note.title === selectedNote && (
-                <div key={index} className={styles.noteDiv}>
-                  <h3>{note.title}</h3>
-                  <div className="note-body" dangerouslySetInnerHTML={{ __html: note.note }} />
-                  <button
-                    className={styles.removeNote}
-                    onClick={(event) => handleRemoveButtonClick(index, event)}
-                  >
+          <div className={styles.saveNewButtons}>
+          <button className={styles.newNoteButton} onClick={handleNewNoteButtonClick}>
+              New Note
+            </button>
+            <button className={styles.submitNote} onClick={handleButtonClick}>
+              Save
+            </button>
+            <button className={styles.removeNote} onClick={handleRemoveButtonClick}>
                     Delete Note
                   </button>
                 </div>
-              )
-            ))
-          ) : (
-            <p className={styles.notePlaceholder}>Select a note from the sidebar</p>
-          )}
+
+          
+          
+
+                  
+
         </div>
+        
       </div>
     </div>
   );
