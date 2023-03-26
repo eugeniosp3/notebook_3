@@ -11,7 +11,7 @@ function TrashBin({ notes, onDeleteNote, onRestoreNote }) {
   if (!notes) {
     return null;
   }
-// comment
+// comment out the following line to see a bug
   const handleRestoreNote = (note) => {
     const confirmed = window.confirm(`Are you sure you want to restore ${note.title} from deleted?`);
     if (confirmed) {
