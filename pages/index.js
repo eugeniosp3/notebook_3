@@ -6,6 +6,7 @@ import { UilHeart } from '@iconscout/react-unicons';
 import { nanoid } from 'nanoid';
 import { UilFileTimesAlt, UilHistory } from '@iconscout/react-unicons'
 const id = nanoid(); // generate a new unique ID
+// eugenio
 
 function TrashBin({ notes, onDeleteNote, onRestoreNote }) {
   if (!notes) {
